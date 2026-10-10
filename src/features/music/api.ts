@@ -6,3 +6,6 @@ export { musicPlayer } from './playback/player.js';
 export { findTracks, selectedMusicSource, DEFAULT_MUSIC_SOURCE } from './application/catalog.js';
 export { playTracks } from './presentation/playbackActions.js';
 export { displayText } from './presentation/panel.js';
+export { createMusicController, type MusicController } from './application/controller.js';
+export { PlaybackOperationError, type PlaybackErrorCode, type PlaybackOperationContext,
+    type PlayerCommand, type PlayerSnapshot, type PlaybackTrack, type PlaybackEntry, type VoiceContext } from './model/control.js';

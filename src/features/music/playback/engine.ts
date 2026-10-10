@@ -9,7 +9,10 @@ interface PlaybackEvents {
     scheduleAdvance(session: MusicSession, token: number, reason: 'finished' | 'error', error?: Error): void;
 }
 export class PlaybackEngine {
-    constructor(private readonly events: PlaybackEvents, private readonly loadAudio: AudioLoader = loadTrackAudio) {}
+    constructor(private readonly events: PlaybackEvents, private readonly loadAudio: AudioLoader = loadTrackAudio,
+        private readonly loadTimeoutMs = 60_000) {
+        if (!Number.isFinite(loadTimeoutMs) || loadTimeoutMs <= 0) throw new RangeError('Audio loading timeout must be positive.');
+    }
     async advance(session: MusicSession, reason: 'finished' | 'skip' | 'error'): Promise<void> {
         if (!session.active) return;
         const previous = session.queue.current;
@@ -36,8 +39,15 @@ export class PlaybackEngine {
         try {
             const loading = new AbortController();
             session.loadController = loading;
-            const audio = await this.loadAudio(entry.track, session.volume,
-                error => this.events.scheduleAdvance(session, token, 'error', error), loading, offset);
+            // An idle timeout alone lets a slow drip occupy the guild queue forever.
+            // Abort actual I/O and wait for its cleanup, rather than releasing the task early.
+            const timeout = setTimeout(() => loading.abort(new Error('音訊載入超過 60 秒，已取消。')), this.loadTimeoutMs).unref();
+            let audio: Awaited<ReturnType<AudioLoader>>;
+            try {
+                audio = await this.loadAudio(entry.track, session.volume,
+                    error => this.events.scheduleAdvance(session, token, 'error', error), loading, offset);
+            } finally { clearTimeout(timeout); }
+            if (loading.signal.aborted) { audio.dispose(); loading.signal.throwIfAborted(); }
             if (session.loadController === loading) session.loadController = undefined;
             if (!session.active || session.generation !== token) { audio.dispose(); return; }
             session.audio = audio;

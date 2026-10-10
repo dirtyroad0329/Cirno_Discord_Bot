@@ -1,0 +1,29 @@
+# Adjust the service user, checkout path and Node binary before installation.
+[Unit]
+Description=Cirno Discord Bot and music website supervisor
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=cirno
+Group=cirno
+WorkingDirectory=/opt/cirno/Cirno_Discord_Bot
+Environment=NODE_ENV=production
+# Root .env and web/.env are loaded by their own modules; do not merge EnvironmentFiles.
+ExecStart=/usr/bin/node /opt/cirno/Cirno_Discord_Bot/web/dist/server/supervised-entry.js
+Restart=on-failure
+RestartPreventExitStatus=78
+RestartSec=15
+TimeoutStopSec=30
+KillMode=mixed
+UMask=0077
+NoNewPrivileges=true
+
+# Optional host-specific cap; includes both the supervisor and combined child.
+# MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target

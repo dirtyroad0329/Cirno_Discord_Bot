@@ -36,10 +36,12 @@ function parseTrack(value: unknown): RemoteTrack {
         duration: item.durationSeconds || undefined, mimeType: item.mimeType, byteSize: item.byteSize, sha256: item.sha256 };
 }
 
-async function request(path: string, query?: URLSearchParams, timeoutMs = 8000): Promise<Response> {
+async function request(path: string, query?: URLSearchParams, timeoutMs = 8000, externalSignal?: AbortSignal): Promise<Response> {
     const { token } = remoteMusicApiSettings();
     let response: Response;
-    const signal = AbortSignal.timeout(timeoutMs);
+    externalSignal?.throwIfAborted();
+    const timeout = AbortSignal.timeout(timeoutMs);
+    const signal = externalSignal ? AbortSignal.any([externalSignal, timeout]) : timeout;
     try {
         for (let attempt = 0; ; attempt++) {
             response = await fetch(url(path, query), { headers: { Authorization: `Bearer ${token}` }, signal, redirect: 'error' });
@@ -51,6 +53,7 @@ async function request(path: string, query?: URLSearchParams, timeoutMs = 8000):
             await delay(Math.min(3000, Math.max(1000, requested || 1000)), undefined, { signal });
         }
     } catch {
+        externalSignal?.throwIfAborted();
         throw new Error('無法連線至遠端曲庫。');
     }
     if (!response.ok) {
@@ -76,9 +79,9 @@ export async function searchRemoteSongs(query = '', cursor?: string, limit = 25,
     return { items: body.items.map(parseTrack), nextCursor: body.nextCursor || undefined };
 }
 
-export async function getRemoteSong(id: string): Promise<RemoteTrack> {
+export async function getRemoteSong(id: string, options?: { signal?: AbortSignal }): Promise<RemoteTrack> {
     if (!UUID.test(id)) throw new UserActionError('遠端歌曲 ID 無效。');
-    const response = await request(`v1/songs/${id}`);
+    const response = await request(`v1/songs/${id}`, undefined, 8000, options?.signal);
     return parseTrack(await response.json());
 }
 

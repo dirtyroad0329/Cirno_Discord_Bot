@@ -1,0 +1,42 @@
+# Replace the domain/certificate paths and set WEB_PUBLIC_URL=https://music.example.com.
+# This proxy is for Cirno web only; music_server keeps its existing deployment.
+server {
+    listen 80;
+    server_name music.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name music.example.com;
+    ssl_certificate /etc/letsencrypt/live/music.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/music.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    # No uploads pass through this website API.
+    client_max_body_size 256k;
+
+    location = / {
+        return 302 /web/;
+    }
+    location = /web {
+        return 302 /web/;
+    }
+    location /web/ {
+        # No trailing URI: retain the complete /web/ path for Fastify/static/API.
+        proxy_pass http://127.0.0.1:3100;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 90s;
+        proxy_send_timeout 30s;
+
+        # SSE snapshots and audio Range streams must reach the client immediately.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_request_buffering off;
+    }
+}

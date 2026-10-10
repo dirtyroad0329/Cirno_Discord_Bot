@@ -28,8 +28,15 @@ export class MusicSession {
     recovering = false;
     hasConnected = false;
     constructor(readonly channel: VoiceChannel, readonly lease: VoiceLease,
-        createPanel: (view: () => MusicPanelState) => SessionPanel) {
+        createPanel: (view: () => MusicPanelState) => SessionPanel, onChange?: () => void) {
         this.panel = createPanel(() => this.view());
+        if (onChange) {
+            const update = this.panel.update.bind(this.panel);
+            this.panel.update = (immediate?: boolean) => {
+                update(immediate);
+                onChange();
+            };
+        }
     }
     get active(): boolean { return this.lease.active && this.status !== 'ended'; }
     view(): MusicPanelState {

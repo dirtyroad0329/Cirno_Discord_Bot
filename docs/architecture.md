@@ -68,3 +68,15 @@ node scripts/test-playlist-server.mjs ../music_server/api
 架構檢查驗證靜態 runtime imports 無循環，並限制 feature/shared/command 的依賴方向；不把 type-only imports 當 runtime cycle。動態 import 與外部套件不在靜態檢查範圍。
 
 新增指令先放定義與入口到 `commands/<feature>/index.ts`；複雜互動、狀態、外部 API 與規則放到對應 feature。僅在真實共用或獨立副作用邊界需要時新增模組，不為每個 CRUD 建一層 interface/service。改播放或非同步流程時，補測取消、過期事件、失敗恢復與資源釋放；改跨庫清單時同步檢查 Server 版本契約。
+
+## 可選的音樂網站
+
+網站全部放在頂層 `web/`，使用自己的 package、環境設定、建置與測試。Vue 頁面只使用 `web/contracts` 與網站 HTTP API；網站 Fastify 負責認證、同源／CSRF、可信清單 owner、上游 HTTP、音訊代理與 SSE。帳密／session 的 SQLite、migration、備份及 CLI 均由網站擁有，歌曲／清單只使用既有 `music_server` API。
+
+`web/server/entry.ts` 是可選的組裝入口：先載入根目錄原有 Bot 設定，再啟動唯一 `startBot` 與網站。網站透過建置後的 `features/music/api` 控制共用播放器，透過 `features/playlists/api` 解析收藏；沒有直接操作 Bot session 內部欄位。Bot 的 `src/` 不引用 `web/`，根目錄 `npm start` 沿用原入口。先建置 Bot 的公開型別與能力，再建置網站。
+
+`MusicController` 驗證 Gateway／shard、使用者目前的一般語音頻道及共用 session；在 guild 排隊操作執行前重查語音、期限、session／generation／queue revision。網站傳入取消 signal，Bot 保有實際播放器佇列與生命週期；停止／跳曲仍先取消載入。無文字面板的網站播放共用原有 `MusicPlayer`，不建立第二份語音 session。狀態觀察者的拋錯、rejection 或無回應不阻擋 Bot。
+
+網站組裝入口擁有 Bot 與認證 DB；Fastify `close` 只清理網站的請求、串流與訂閱。正常合併停止先關閉網站及認證 DB，再停止 Bot；啟動中的 Bot 使用獨立取消 signal，避免網站清理前提早拆掉已就緒的 Bot。網站已捕捉的啟動／請求失敗保留 Bot。同程序的致命崩潰、事件迴圈卡住與記憶體耗盡仍會影響 Bot；可選父程序只監督心跳，不再登入另一個 Bot。
+
+移除網站時改回根目錄啟動指令並移除 `web/` 即可，Bot 中立能力可保留。實際隔離建置、故障注入及相容性結果見[測試紀錄](testing.md)，網站安裝／持久資料／部署／回退見 [`web/README.md`](../web/README.md)，核准設計見[計劃書](計劃書.md)。
